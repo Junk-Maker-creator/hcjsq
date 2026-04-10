@@ -989,6 +989,83 @@
             });
         }
         
+        // 确认交付并扣减库存
+        function confirmDelivery() {
+            if (!window.currentCalculation) {
+                alert('请先计算成本');
+                return;
+            }
+            
+            const { projectName, materialType, totalMaterialConsumed, materialCost, wastageCost, electricityTotal, laborTotal, depreciationTotal, shippingTotal, totalCost, quote, profit } = window.currentCalculation;
+            
+            // 扣减耗材库存
+            const consumptionResult = consumeMaterial(materialType, totalMaterialConsumed, projectName);
+            
+            // 显示耗材消耗提示
+            const resultDiv = document.getElementById('result');
+            const oldInfo = resultDiv.querySelector('.consumption-record');
+            if (oldInfo) oldInfo.remove();
+            
+            if (!consumptionResult.success) {
+                const errorInfo = document.createElement('div');
+                errorInfo.className = 'consumption-record';
+                errorInfo.innerHTML = `
+                    <strong style="color: #ff4d4f;">✗ 库存扣减失败</strong><br>
+                    ${consumptionResult.message}
+                `;
+                resultDiv.appendChild(errorInfo);
+                return;
+            } else if (consumptionResult.partial) {
+                const partialInfo = document.createElement('div');
+                partialInfo.className = 'consumption-record';
+                partialInfo.innerHTML = `
+                    <strong style="color: #faad14;">⚠️ 库存扣减不完全</strong><br>
+                    ${consumptionResult.message}
+                `;
+                resultDiv.appendChild(partialInfo);
+            } else {
+                // 显示消耗成功提示
+                const successInfo = document.createElement('div');
+                successInfo.className = 'consumption-record';
+                successInfo.innerHTML = `
+                    <strong style="color: #52c41a;">✓ 库存已成功扣减</strong><br>
+                    项目: ${projectName}<br>
+                    类型: ${materialType.toUpperCase()}<br>
+                    消耗: ${totalMaterialConsumed.toFixed(1)}g (含损耗)
+                `;
+                resultDiv.appendChild(successInfo);
+            }
+            
+            // 添加到历史记录
+            const historyItem = {
+                projectName,
+                projectDate: document.getElementById('projectDate').value || new Date().toISOString().split('T')[0],
+                materialType,
+                materialWeight: parseFloat(document.getElementById('materialWeight').value) || 0,
+                totalPrintTime: parseFloat(document.getElementById('printHours').value) || 0 + (parseFloat(document.getElementById('printMinutes').value) || 0) / 60,
+                totalCost,
+                quote,
+                profit,
+                timestamp: new Date().toISOString()
+            };
+            
+            history.unshift(historyItem); // 添加到历史记录开头
+            if (history.length > 1000) {
+                history = history.slice(0, 1000); // 只保留最近1000条记录
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('printCostHistory', JSON.stringify(history));
+            
+            // 更新历史记录显示
+            displayHistory();
+            // 更新实时利润显示
+            updateRealTimeProfit();
+            
+            // 清除当前计算结果
+            window.currentCalculation = null;
+        }
+        
         // 计算成本
         function calculateCost() {
             // 获取输入值
@@ -1036,58 +1113,42 @@
             // 计算总耗材消耗（包括损耗）
             const totalMaterialConsumed = materialWeight + (materialWeight * (wastageRate / 100)) + additionalWastage;
             
-            // 自动扣减耗材库存
-            const consumptionResult = consumeMaterial(materialType, totalMaterialConsumed, projectName);
-            
-            // 显示耗材消耗提示
-            if (!consumptionResult.success) {
-                alert('⚠️ ' + consumptionResult.message);
-            } else if (consumptionResult.partial) {
-                alert('⚠️ ' + consumptionResult.message);
-            } else {
-                // 显示消耗成功提示
-                const consumptionInfo = document.createElement('div');
-                consumptionInfo.className = 'consumption-record';
-                consumptionInfo.innerHTML = `
-                    <strong>✓ 耗材已自动扣减</strong><br>
-                    项目: ${projectName}<br>
-                    类型: ${materialType.toUpperCase()}<br>
-                    消耗: ${totalMaterialConsumed.toFixed(1)}g (含损耗)
-                `;
-                
-                // 添加到结果区域
-                const resultDiv = document.getElementById('result');
-                // 移除旧的提示
-                const oldInfo = resultDiv.querySelector('.consumption-record');
-                if (oldInfo) oldInfo.remove();
-                resultDiv.appendChild(consumptionInfo);
-            }
-            
-            // 添加到历史记录
-            const historyItem = {
+            // 保存计算结果，等待确认交付后扣减库存
+            window.currentCalculation = {
                 projectName,
-                projectDate,
                 materialType,
-                materialWeight,
-                totalPrintTime,
+                totalMaterialConsumed,
+                materialCost,
+                wastageCost,
+                electricityTotal,
+                laborTotal,
+                depreciationTotal,
+                shippingTotal,
                 totalCost,
                 quote,
-                profit,
-                timestamp: new Date(projectDate).toISOString()
+                profit
             };
             
-            history.unshift(historyItem); // 添加到历史记录开头
-            if (history.length > 1000) {
-                history = history.slice(0, 1000); // 只保留最近1000条记录
-            }
+            // 显示确认交付按钮
+            const resultDiv = document.getElementById('result');
+            // 移除旧的提示
+            const oldInfo = resultDiv.querySelector('.consumption-record');
+            if (oldInfo) oldInfo.remove();
             
-            // 保存到本地存储
-            localStorage.setItem('printCostHistory', JSON.stringify(history));
+            // 添加确认交付按钮
+            const deliveryInfo = document.createElement('div');
+            deliveryInfo.className = 'consumption-record';
+            deliveryInfo.innerHTML = `
+                <strong>⚠️ 请确认交付后扣减库存</strong><br>
+                项目: ${projectName}<br>
+                类型: ${materialType.toUpperCase()}<br>
+                预计消耗: ${totalMaterialConsumed.toFixed(1)}g (含损耗)
+                <br><br>
+                <button onclick="confirmDelivery()" style="background-color: #52c41a;">确认交付并扣减库存</button>
+            `;
+            resultDiv.appendChild(deliveryInfo);
             
-            // 更新历史记录显示
-            displayHistory();
-            // 更新实时利润显示
-            updateRealTimeProfit();
+            // 历史记录将在确认交付后添加
         }
         
         // 清空表单
@@ -1117,6 +1178,14 @@
             document.getElementById('shippingCostResult').textContent = '0.00 元';
             document.getElementById('totalCostResult').textContent = '0.00 元';
             document.getElementById('quoteResult').textContent = '0.00 元';
+            
+            // 清除当前计算结果
+            window.currentCalculation = null;
+            
+            // 移除消耗记录提示
+            const resultDiv = document.getElementById('result');
+            const oldInfo = resultDiv.querySelector('.consumption-record');
+            if (oldInfo) oldInfo.remove();
         }
         
         // 显示历史记录
