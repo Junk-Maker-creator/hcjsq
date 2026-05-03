@@ -293,8 +293,34 @@
                 </div>
                 <div class="col">
                     <div class="form-group">
+                        <label for="materialBrand">耗材品牌</label>
+                        <input list="commonBrands" id="materialBrand" onchange="onMaterialBrandChange()" placeholder="选择或输入品牌">
+                        <datalist id="commonBrands">
+                            <option value="eSun">
+                            <option value="Polymaker">
+                            <option value="Overture">
+                            <option value="Creality">
+                            <option value="Hatchbox">
+                            <option value="Prusament">
+                            <option value="SUNLU">
+                            <option value="Anycubic">
+                            <option value="JAYO">
+                            <option value="聚鲸">
+                            <option value="其他">
+                        </datalist>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label for="materialColor">耗材颜色</label>
+                        <input list="commonColors" id="materialColor" onchange="onMaterialColorChange()" placeholder="选择或输入颜色">
+                        <datalist id="commonColors"></datalist>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
                         <label for="materialPrice">耗材价格 (元/kg)</label>
-                        <input type="number" id="materialPrice" placeholder="请输入耗材价格" step="0.1">
+                        <input type="number" id="materialPrice" placeholder="请输入耗材价格或选择品牌自动填充" step="0.1">
                     </div>
                 </div>
             </div>
@@ -458,7 +484,7 @@
                 <div class="col">
                     <div class="form-group">
                         <label for="stockMaterialType">耗材类型</label>
-                        <select id="stockMaterialType">
+                        <select id="stockMaterialType" onchange="updateStockBrandOptions()">
                             <option value="pla">PLA</option>
                             <option value="abs">ABS</option>
                             <option value="petg">PETG</option>
@@ -470,13 +496,27 @@
                 <div class="col">
                     <div class="form-group">
                         <label for="stockMaterialColor">颜色</label>
-                        <input type="text" id="stockMaterialColor" placeholder="例如：白色、黑色">
+                        <input list="stockColorList" type="text" id="stockMaterialColor" placeholder="选择或输入颜色">
+                        <datalist id="stockColorList"></datalist>
                     </div>
                 </div>
                 <div class="col">
                     <div class="form-group">
                         <label for="stockMaterialBrand">品牌</label>
-                        <input type="text" id="stockMaterialBrand" placeholder="例如：eSun、Polymaker">
+                        <input list="stockBrandList" type="text" id="stockMaterialBrand" onchange="updateStockColorOptions()" placeholder="选择或输入品牌">
+                        <datalist id="stockBrandList">
+                            <option value="eSun">
+                            <option value="Polymaker">
+                            <option value="Overture">
+                            <option value="Creality">
+                            <option value="Hatchbox">
+                            <option value="Prusament">
+                            <option value="SUNLU">
+                            <option value="Anycubic">
+                            <option value="JAYO">
+                            <option value="聚鲸">
+                            <option value="其他">
+                        </datalist>
                     </div>
                 </div>
             </div>
@@ -665,28 +705,290 @@
     <script>
         // 历史记录数组
         let history = JSON.parse(localStorage.getItem('printCostHistory')) || [];
-        
+
         // 耗材库存数组
         let materialStock = JSON.parse(localStorage.getItem('materialStock')) || [];
-        
+
         // 耗材消耗记录数组
         let consumptionRecords = JSON.parse(localStorage.getItem('consumptionRecords')) || [];
+
+        // 耗材品牌按类型关联存储
+        let materialBrands = JSON.parse(localStorage.getItem('materialBrands')) || {};
+
+        // 耗材颜色按类型和品牌关联存储
+        let materialColors = JSON.parse(localStorage.getItem('materialColors')) || {};
         
         // 页面加载时显示历史记录、实时利润和库存
         window.onload = function() {
             // 设置默认日期
             document.getElementById('projectDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('stockPurchaseDate').value = new Date().toISOString().split('T')[0];
-            
+
             displayHistory();
             updateRealTimeProfit();
             displayStock();
             displayConsumptionRecords();
             checkStockAlerts();
+            updateMaterialBrandOptions();
+            updateStockBrandOptions();
+            updateMaterialColorOptions();
+            updateStockColorOptions();
         };
+
+        // ==================== 耗材品牌自动填充功能 ====================
+
+        // 预设品牌列表
+        const presetBrands = ['eSun', 'Polymaker', 'Overture', 'Creality', 'Hatchbox', 'Prusament', 'SUNLU', 'Anycubic', 'JAYO', '聚鲸', '其他'];
+
+        // 更新成本计算中的品牌下拉框
+        function updateMaterialBrandOptions() {
+            const materialType = document.getElementById('materialType').value;
+
+            // 收集品牌（合并：预设品牌 + 自定义品牌存储 + 库存中存在的品牌）
+            const allBrands = new Set(presetBrands);
+
+            // 添加materialBrands中该类型关联的品牌
+            if (materialBrands[materialType]) {
+                materialBrands[materialType].forEach(brand => allBrands.add(brand));
+            }
+
+            // 添加库存中该类型存在的品牌
+            materialStock.forEach(item => {
+                if (item.materialType === materialType && item.brand && item.brand !== '未指定') {
+                    allBrands.add(item.brand);
+                }
+            });
+
+            // 获取datalist
+            const datalist = document.getElementById('commonBrands');
+
+            // 清空并重新填充
+            datalist.innerHTML = '';
+            allBrands.forEach(brand => {
+                const option = document.createElement('option');
+                option.value = brand;
+                datalist.appendChild(option);
+            });
+        }
+
+        // 更新入库表单的品牌下拉列表
+        function updateStockBrandOptions() {
+            const materialType = document.getElementById('stockMaterialType').value;
+            const datalist = document.getElementById('stockBrandList');
+
+            // 收集品牌（合并：预设品牌 + 自定义品牌存储 + 库存中存在的品牌）
+            const allBrands = new Set(presetBrands);
+
+            // 添加materialBrands中该类型关联的品牌
+            if (materialBrands[materialType]) {
+                materialBrands[materialType].forEach(brand => allBrands.add(brand));
+            }
+
+            // 添加库存中该类型存在的品牌
+            materialStock.forEach(item => {
+                if (item.materialType === materialType && item.brand && item.brand !== '未指定') {
+                    allBrands.add(item.brand);
+                }
+            });
+
+            // 清空并重新填充
+            datalist.innerHTML = '';
+            allBrands.forEach(brand => {
+                const option = document.createElement('option');
+                option.value = brand;
+                datalist.appendChild(option);
+            });
+        }
+
+        // 更新入库表单的颜色下拉列表
+        function updateStockColorOptions() {
+            const materialType = document.getElementById('stockMaterialType').value;
+            const brand = document.getElementById('stockMaterialBrand').value;
+            const datalist = document.getElementById('stockColorList');
+
+            const colors = new Set();
+
+            // 只添加已有记录的颜色（不显示预设颜色）
+            // 添加materialColors中该类型和品牌关联的颜色
+            if (brand) {
+                const key = `${materialType}_${brand}`;
+                if (materialColors[key]) {
+                    materialColors[key].forEach(c => colors.add(c));
+                }
+            }
+
+            // 添加库存中该类型和品牌存在的颜色
+            materialStock.forEach(item => {
+                if (item.materialType === materialType && item.brand === brand && item.color && item.color !== '未指定') {
+                    colors.add(item.color);
+                }
+            });
+
+            // 清空并重新填充
+            datalist.innerHTML = '';
+            colors.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c;
+                datalist.appendChild(option);
+            });
+        }
+
+        // 当耗材类型变更时，更新品牌下拉框
+        function onMaterialTypeChange() {
+            updateMaterialBrandOptions();
+            updateStockBrandOptions();
+            updateMaterialColorOptions();
+            onMaterialBrandChange();
+        }
+
+        // 同步品牌到materialBrands（按耗材类型关联）
+        function syncBrandToStorage(materialType, brand) {
+            if (!brand || brand === '未指定') return;
+
+            if (!materialBrands[materialType]) {
+                materialBrands[materialType] = [];
+            }
+
+            if (!materialBrands[materialType].includes(brand)) {
+                materialBrands[materialType].push(brand);
+                localStorage.setItem('materialBrands', JSON.stringify(materialBrands));
+            }
+        }
+
+        // 同步颜色到materialColors（按类型和品牌关联）
+        function syncColorToStorage(materialType, brand, color) {
+            if (!color || color === '未指定') return;
+
+            const key = `${materialType}_${brand}`;
+            if (!materialColors[key]) {
+                materialColors[key] = [];
+            }
+
+            if (!materialColors[key].includes(color)) {
+                materialColors[key].push(color);
+                localStorage.setItem('materialColors', JSON.stringify(materialColors));
+            }
+        }
+
+        // 当品牌选择变更时，更新颜色选项并填充价格
+        function onMaterialBrandChange() {
+            const brand = document.getElementById('materialBrand').value;
+            const materialType = document.getElementById('materialType').value;
+            const color = document.getElementById('materialColor').value;
+
+            // 更新颜色选项
+            updateMaterialColorOptions();
+
+            if (!brand) {
+                return;
+            }
+
+            // 查找该类型、品牌和颜色的库存，计算平均价格
+            let matchingStock;
+            if (color && color !== '未指定') {
+                matchingStock = materialStock.filter(
+                    item => item.materialType === materialType && item.brand === brand && item.color === color && item.pricePerRoll > 0
+                );
+            } else {
+                matchingStock = materialStock.filter(
+                    item => item.materialType === materialType && item.brand === brand && item.pricePerRoll > 0
+                );
+            }
+
+            if (matchingStock.length > 0) {
+                // 计算平均每公斤价格
+                let totalPricePerKg = 0;
+                let validCount = 0;
+
+                matchingStock.forEach(item => {
+                    if (item.initialWeight > 0 && item.pricePerRoll > 0) {
+                        totalPricePerKg += (item.pricePerRoll / item.initialWeight) * 1000;
+                        validCount++;
+                    }
+                });
+
+                if (validCount > 0) {
+                    const avgPricePerKg = totalPricePerKg / validCount;
+                    document.getElementById('materialPrice').value = avgPricePerKg.toFixed(2);
+                }
+            }
+        }
+
+        // 更新成本计算中的颜色选项
+        function updateMaterialColorOptions() {
+            const materialType = document.getElementById('materialType').value;
+            const brand = document.getElementById('materialBrand').value;
+            const datalist = document.getElementById('commonColors');
+
+            const colors = new Set();
+
+            // 只添加已有记录的颜色（不显示预设颜色）
+            // 添加materialColors中该类型和品牌关联的颜色
+            if (brand) {
+                const key = `${materialType}_${brand}`;
+                if (materialColors[key]) {
+                    materialColors[key].forEach(c => colors.add(c));
+                }
+            }
+
+            // 添加库存中该类型和品牌存在的颜色
+            materialStock.forEach(item => {
+                if (item.materialType === materialType && item.brand === brand && item.color && item.color !== '未指定') {
+                    colors.add(item.color);
+                }
+            });
+
+            // 清空并重新填充
+            datalist.innerHTML = '';
+            colors.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c;
+                datalist.appendChild(option);
+            });
+        }
+
+        // 当颜色选择变更时，更新价格
+        function onMaterialColorChange() {
+            const materialType = document.getElementById('materialType').value;
+            const brand = document.getElementById('materialBrand').value;
+            const color = document.getElementById('materialColor').value;
+
+            if (!brand || !color) {
+                return;
+            }
+
+            // 同步颜色到存储
+            syncColorToStorage(materialType, brand, color);
+
+            // 查找该类型、品牌和颜色的库存，计算平均价格
+            const matchingStock = materialStock.filter(
+                item => item.materialType === materialType && item.brand === brand && item.color === color && item.pricePerRoll > 0
+            );
+
+            if (matchingStock.length > 0) {
+                // 计算平均每公斤价格
+                let totalPricePerKg = 0;
+                let validCount = 0;
+
+                matchingStock.forEach(item => {
+                    if (item.initialWeight > 0 && item.pricePerRoll > 0) {
+                        totalPricePerKg += (item.pricePerRoll / item.initialWeight) * 1000;
+                        validCount++;
+                    }
+                });
+
+                if (validCount > 0) {
+                    const avgPricePerKg = totalPricePerKg / validCount;
+                    document.getElementById('materialPrice').value = avgPricePerKg.toFixed(2);
+                }
+            }
+        }
+
+        // 当耗材类型变更时，更新品牌下拉框
+        document.getElementById('materialType').addEventListener('change', onMaterialTypeChange);
         
         // ==================== 耗材库存管理功能 ====================
-        
+
         // 添加入库
         function addStock() {
             const materialType = document.getElementById('stockMaterialType').value;
@@ -698,42 +1000,82 @@
             const warningThreshold = parseFloat(document.getElementById('stockWarningThreshold').value) || 200;
             const purchaseDate = document.getElementById('stockPurchaseDate').value || new Date().toISOString().split('T')[0];
             const notes = document.getElementById('stockNotes').value || '';
-            
+
             if (quantity < 1) {
                 alert('入库数量必须至少为1卷');
                 return;
             }
-            
-            // 为每卷创建独立的库存记录
-            for (let i = 0; i < quantity; i++) {
-                const stockItem = {
-                    id: Date.now() + i,
-                    materialType,
-                    color,
-                    brand,
-                    initialWeight: weightPerRoll,
-                    remainingWeight: weightPerRoll,
-                    pricePerRoll,
-                    warningThreshold,
-                    purchaseDate,
-                    notes: quantity > 1 ? `${notes} (${i + 1}/${quantity})` : notes,
-                    createdAt: new Date().toISOString()
-                };
-                
-                materialStock.push(stockItem);
+
+            // 查找是否存在相同类型、颜色、品牌的库存记录
+            const existingStock = materialStock.find(
+                item => item.materialType === materialType &&
+                       item.color === color &&
+                       item.brand === brand
+            );
+
+            // 同步品牌到存储
+            syncBrandToStorage(materialType, brand);
+
+            // 同步颜色到存储
+            syncColorToStorage(materialType, brand, color);
+
+            if (existingStock) {
+                // 合并到现有库存
+                const totalAddedWeight = weightPerRoll * quantity;
+                existingStock.initialWeight += totalAddedWeight;
+                existingStock.remainingWeight += totalAddedWeight;
+                existingStock.pricePerRoll += pricePerRoll * quantity;
+                existingStock.warningThreshold = warningThreshold;
+                existingStock.purchaseDate = purchaseDate;
+                if (notes) {
+                    existingStock.notes = existingStock.notes ? `${existingStock.notes}; ${notes}` : notes;
+                }
+
+                // 保存到本地存储
+                localStorage.setItem('materialStock', JSON.stringify(materialStock));
+
+                // 更新显示
+                displayStock();
+                updateMaterialBrandOptions();
+                checkStockAlerts();
+
+                // 清空表单
+                clearStockForm();
+
+                alert(`已合并入库 ${quantity} 卷 ${materialType.toUpperCase()} 耗材到现有库存！\n类型: ${materialType.toUpperCase()}\n颜色: ${color}\n品牌: ${brand}\n本次增加: ${totalAddedWeight}g\n合并后总量: ${existingStock.initialWeight}g`);
+            } else {
+                // 为每卷创建独立的库存记录
+                for (let i = 0; i < quantity; i++) {
+                    const stockItem = {
+                        id: Date.now() + i,
+                        materialType,
+                        color,
+                        brand,
+                        initialWeight: weightPerRoll,
+                        remainingWeight: weightPerRoll,
+                        pricePerRoll,
+                        warningThreshold,
+                        purchaseDate,
+                        notes: quantity > 1 ? `${notes} (${i + 1}/${quantity})` : notes,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    materialStock.push(stockItem);
+                }
+
+                // 保存到本地存储
+                localStorage.setItem('materialStock', JSON.stringify(materialStock));
+
+                // 更新显示
+                displayStock();
+                updateMaterialBrandOptions();
+                checkStockAlerts();
+
+                // 清空表单
+                clearStockForm();
+
+                alert(`成功入库 ${quantity} 卷 ${materialType.toUpperCase()} 耗材！`);
             }
-            
-            // 保存到本地存储
-            localStorage.setItem('materialStock', JSON.stringify(materialStock));
-            
-            // 更新显示
-            displayStock();
-            checkStockAlerts();
-            
-            // 清空表单
-            clearStockForm();
-            
-            alert(`成功入库 ${quantity} 卷 ${materialType.toUpperCase()} 耗材！`);
         }
         
         // 清空入库表单
@@ -836,6 +1178,7 @@
                 materialStock.splice(index, 1);
                 localStorage.setItem('materialStock', JSON.stringify(materialStock));
                 displayStock();
+                updateMaterialBrandOptions();
                 checkStockAlerts();
             }
         }
@@ -886,26 +1229,45 @@
         }
         
         // 消耗耗材（在计算成本时自动调用）
-        function consumeMaterial(materialType, weight, projectName) {
-            // 查找对应类型的库存，优先使用剩余量最少的
-            const availableStock = materialStock
-                .filter(item => item.materialType === materialType && item.remainingWeight > 0)
+        function consumeMaterial(materialType, weight, projectName, brand, color) {
+            // 优先查找完全匹配（类型+品牌+颜色）的库存
+            let availableStock = materialStock
+                .filter(item => item.materialType === materialType &&
+                               item.brand === brand &&
+                               item.color === color &&
+                               item.remainingWeight > 0)
                 .sort((a, b) => a.remainingWeight - b.remainingWeight);
-            
+
+            // 如果没有完全匹配的，尝试类型+品牌匹配
+            if (availableStock.length === 0) {
+                availableStock = materialStock
+                    .filter(item => item.materialType === materialType &&
+                                   item.brand === brand &&
+                                   item.remainingWeight > 0)
+                    .sort((a, b) => a.remainingWeight - b.remainingWeight);
+            }
+
+            // 如果还是没有，尝试仅类型匹配
+            if (availableStock.length === 0) {
+                availableStock = materialStock
+                    .filter(item => item.materialType === materialType && item.remainingWeight > 0)
+                    .sort((a, b) => a.remainingWeight - b.remainingWeight);
+            }
+
             if (availableStock.length === 0) {
                 return { success: false, message: `没有可用的 ${materialType.toUpperCase()} 耗材库存` };
             }
-            
+
             let remainingToConsume = weight;
             const consumedFrom = [];
-            
+
             for (const stock of availableStock) {
                 if (remainingToConsume <= 0) break;
-                
+
                 const consumeAmount = Math.min(stock.remainingWeight, remainingToConsume);
                 stock.remainingWeight -= consumeAmount;
                 remainingToConsume -= consumeAmount;
-                
+
                 consumedFrom.push({
                     stockId: stock.id,
                     materialType: stock.materialType,
@@ -915,27 +1277,29 @@
                     remaining: stock.remainingWeight
                 });
             }
-            
+
             // 记录消耗
             const consumptionRecord = {
                 date: new Date().toISOString().split('T')[0],
                 projectName,
                 materialType,
+                brand,
+                color,
                 consumedWeight: weight - remainingToConsume,
                 remainingAfter: weight - remainingToConsume,
                 consumedFrom,
                 timestamp: new Date().toISOString()
             };
-            
+
             consumptionRecords.unshift(consumptionRecord);
             if (consumptionRecords.length > 1000) {
                 consumptionRecords = consumptionRecords.slice(0, 1000);
             }
-            
+
             // 保存到本地存储
             localStorage.setItem('materialStock', JSON.stringify(materialStock));
             localStorage.setItem('consumptionRecords', JSON.stringify(consumptionRecords));
-            
+
             // 更新显示
             displayStock();
             displayConsumptionRecords();
@@ -990,11 +1354,11 @@
                 alert('请先计算成本');
                 return;
             }
-            
-            const { projectName, materialType, totalMaterialConsumed, materialCost, wastageCost, electricityTotal, laborTotal, depreciationTotal, shippingTotal, totalCost, quote, profit } = window.currentCalculation;
-            
-            // 扣减耗材库存
-            const consumptionResult = consumeMaterial(materialType, totalMaterialConsumed, projectName);
+
+            const { projectName, materialType, materialBrand, materialColor, totalMaterialConsumed, materialCost, wastageCost, electricityTotal, laborTotal, depreciationTotal, shippingTotal, totalCost, quote, profit } = window.currentCalculation;
+
+            // 扣减耗材库存（按类型+品牌+颜色扣减）
+            const consumptionResult = consumeMaterial(materialType, totalMaterialConsumed, projectName, materialBrand, materialColor);
             
             // 显示耗材消耗提示
             const resultDiv = document.getElementById('result');
@@ -1067,6 +1431,8 @@
             const projectName = document.getElementById('projectName').value || '未命名';
             const projectDate = document.getElementById('projectDate').value || new Date().toISOString().split('T')[0];
             const materialType = document.getElementById('materialType').value;
+            const materialBrand = document.getElementById('materialBrand').value || '';
+            const materialColor = document.getElementById('materialColor').value || '';
             const materialWeight = parseFloat(document.getElementById('materialWeight').value) || 0;
             const materialPrice = parseFloat(document.getElementById('materialPrice').value) || 0;
             const printHours = parseFloat(document.getElementById('printHours').value) || 0;
@@ -1112,6 +1478,8 @@
             window.currentCalculation = {
                 projectName,
                 materialType,
+                materialBrand,
+                materialColor,
                 totalMaterialConsumed,
                 materialCost,
                 wastageCost,
@@ -1133,10 +1501,12 @@
             // 添加确认交付按钮
             const deliveryInfo = document.createElement('div');
             deliveryInfo.className = 'consumption-record';
+            const brandInfo = materialBrand ? ` | 品牌: ${materialBrand}` : '';
+            const colorInfo = materialColor ? ` | 颜色: ${materialColor}` : '';
             deliveryInfo.innerHTML = `
                 <strong>⚠️ 请确认交付后扣减库存</strong><br>
                 项目: ${projectName}<br>
-                类型: ${materialType.toUpperCase()}<br>
+                类型: ${materialType.toUpperCase()}${brandInfo}${colorInfo}<br>
                 预计消耗: ${totalMaterialConsumed.toFixed(1)}g (含损耗)
                 <br><br>
                 <button onclick="confirmDelivery()" style="background-color: #52c41a;">确认交付并扣减库存</button>
@@ -1151,6 +1521,8 @@
             document.getElementById('projectName').value = '';
             document.getElementById('projectDate').value = '';
             document.getElementById('materialType').value = 'pla';
+            document.getElementById('materialBrand').value = '';
+            document.getElementById('materialColor').value = '';
             document.getElementById('materialWeight').value = '';
             document.getElementById('materialPrice').value = '';
             document.getElementById('printHours').value = '';
